@@ -1,5 +1,6 @@
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 local plr = Players.LocalPlayer
 local PlayerGui = plr:WaitForChild("PlayerGui")
 
@@ -18,7 +19,96 @@ local COLOR = {
 }
 local TWEEN_FAST = TweenInfo.new(0.2, Enum.EasingStyle.Quad)
 
--- ========== HELPER FUNCTIONS ==========
+-- ========== HELPER: DRAG SLIDER (VISUAL ONLY) ==========
+local function CreateVisualSlider(parent, yPos, LabelText, DefaultValue)
+    local Container = Instance.new("Frame", parent)
+    Container.Size = UDim2.new(1, 0, 0, 52)
+    Container.Position = UDim2.new(0, 0, 0, yPos)
+    Container.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+    Instance.new("UICorner", Container).CornerRadius = UDim.new(0, 8)
+
+    local Label = Instance.new("TextLabel", Container)
+    Label.Text = LabelText
+    Label.Size = UDim2.new(0.32, 0, 1, 0)
+    Label.Position = UDim2.new(0, 10, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.TextColor3 = Color3.new(1,1,1)
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextSize = 15
+
+    local Track = Instance.new("Frame", Container)
+    Track.Size = UDim2.new(0.52, 0, 0, 20)
+    Track.Position = UDim2.new(0.35, 0, 0.5, -10)
+    Track.BackgroundColor3 = Color3.fromRGB(30, 34, 42)
+    Track.BorderColor3 = Color3.fromRGB(65, 140, 220)
+    Track.BorderSizePixel = 1
+    Instance.new("UICorner", Track).CornerRadius = UDim.new(1, 0)
+
+    local Fill = Instance.new("Frame", Track)
+    Fill.Size = UDim2.new(0, 0, 1, 0)
+    Fill.Position = UDim2.new(0,0,0,0)
+    Fill.BackgroundColor3 = Color3.fromRGB(58, 155, 255)
+    Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
+
+    local Knob = Instance.new("Frame", Track)
+    Knob.Size = UDim2.new(0, 26, 1, 4)
+    Knob.ZIndex = 10
+    Knob.BackgroundColor3 = Color3.fromRGB(60, 160, 255)
+    Instance.new("UICorner", Knob).CornerRadius = UDim.new(1, 0)
+
+    local ValueLabel = Instance.new("TextLabel", Container)
+    ValueLabel.Size = UDim2.new(0, 28, 1, 0)
+    ValueLabel.Position = UDim2.new(0.91, -14, 0, 0)
+    ValueLabel.BackgroundTransparency = 1
+    ValueLabel.TextColor3 = Color3.new(1,1,1)
+    ValueLabel.Font = Enum.Font.GothamBold
+    ValueLabel.TextSize = 16
+    ValueLabel.Text = tostring(DefaultValue)
+
+    -- SET INITIAL
+    local function SetByValue(v)
+        v = math.clamp(v, 0, 200)
+        local alpha = v / 200
+        Fill.Size = UDim2.new(alpha, 0, 1, 0)
+        Knob.Position = UDim2.new(alpha, -13, 0, -2)
+        ValueLabel.Text = tostring(math.floor(v))
+    end
+    SetByValue(DefaultValue)
+
+    -- DRAG HANDLER
+    local dragging, startPos, trackAbs
+    local function UpdateFromMouse(x)
+        local minX = Track.AbsolutePosition.X
+        local maxX = minX + Track.AbsoluteSize.X
+        local alpha = math.clamp((x - minX)/(maxX - minX), 0, 1)
+        local val = math.floor(alpha * 200)
+        Fill.Size = UDim2.new(alpha,0,1,0)
+        Knob.Position = UDim2.new(alpha, -13, 0, -2)
+        ValueLabel.Text = tostring(val)
+    end
+
+    Knob.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    Knob.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            UpdateFromMouse(input.Position.X)
+        end
+    end)
+    Knob.InputEnded:Connect(function() dragging = false end)
+
+    Track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            UpdateFromMouse(input.Position.X)
+        end
+    end)
+
+    return Container
+end
+
+-- ========== HELPER TOGGLE ==========
 local function CreateToggle(parent, yPos, labelName, callback)
     local Frame = Instance.new("Frame", parent)
     Frame.Size = UDim2.new(1, -16, 0, 36)
@@ -60,34 +150,7 @@ local function CreateToggle(parent, yPos, labelName, callback)
     return Frame
 end
 
-local function AddInfoLine(parent, yPos, leftText, rightText)
-    local Line = Instance.new("Frame", parent)
-    Line.Size = UDim2.new(1, -20, 0, 26)
-    Line.Position = UDim2.new(0, 10, 0, yPos)
-    Line.BackgroundColor3 = COLOR.SIDE
-    Instance.new("UICorner", Line).CornerRadius = UDim.new(0, 6)
-
-    local L = Instance.new("TextLabel", Line)
-    L.Size = UDim2.new(0.49, 0, 1, 0)
-    L.Position = UDim2.new(0, 8, 0, 0)
-    L.BackgroundTransparency = 1
-    L.Text = leftText
-    L.TextColor3 = COLOR.TEXT_DIM
-    L.Font = Enum.Font.GothamSemibold
-    L.TextSize = 15
-    L.TextXAlignment = Enum.TextXAlignment.Left
-
-    local R = Instance.new("TextLabel", Line)
-    R.Size = UDim2.new(0.49, 0, 1, 0)
-    R.Position = UDim2.new(0.51, -8, 0, 0)
-    R.BackgroundTransparency = 1
-    R.Text = rightText
-    R.TextColor3 = COLOR.ACCENT
-    R.Font = Enum.Font.GothamBold
-    R.TextSize = 15
-end
-
--- ========== LOADING SYSTEM ==========
+-- ========== LOADING ==========
 local function RunLoadingSequence()
     local LoadingGui = Instance.new("ScreenGui")
     LoadingGui.Name = "Hub_Loading"
@@ -133,21 +196,20 @@ local function RunLoadingSequence()
     LoadingGui:Destroy()
 end
 
--- ========== MAIN UI (PINALIIT, WALANG IBANG BINAGO) ==========
+-- ========== MAIN UI ==========
 local function ShowMainUI()
     local MainGui = Instance.new("ScreenGui")
     MainGui.Name = "NexusHub_Main"
     MainGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
     MainGui.Parent = PlayerGui
 
-    -- ✅ Pinaliit ang laki: 460x300
     local MainWindow = Instance.new("Frame", MainGui)
     MainWindow.Size = UDim2.new(0, 460, 0, 300)
     MainWindow.Position = UDim2.new(0.5, -230, 0.5, -150)
     MainWindow.BackgroundColor3 = COLOR.BG
     MainWindow.BorderSizePixel = 2
     MainWindow.BorderColor3 = COLOR.ACCENT
-    Instance.new("UICorner", MainWindow).CornerRadius = UDim.new(0, 12) -- ✅ Bilog na gilid
+    Instance.new("UICorner", MainWindow).CornerRadius = UDim.new(0, 12)
 
     local RestoreBtn = Instance.new("TextButton", MainGui)
     RestoreBtn.Size = UDim2.new(0, 40, 0, 40)
@@ -242,18 +304,53 @@ local function ShowMainUI()
         Pages[TabName]=Page
 
         if TabName=="Main" then
-            local Head=Instance.new("TextLabel", Page)
-            Head.Size=UDim2.new(1,0,0,22)
-            Head.BackgroundTransparency=1
-            Head.Text="👤 PROFILE"
-            Head.TextColor3=COLOR.ACCENT
-            Head.Font=Enum.Font.GothamBold
-            Head.TextSize=16
+            local PlayerSection = Instance.new("Frame", Page)
+            PlayerSection.Size = UDim2.new(1, -5, 0, 190)
+            PlayerSection.Position = UDim2.new(0, 0, 0, 0)
+            PlayerSection.BackgroundTransparency = 1
 
-            AddInfoLine(Page,32,"Username",plr.Name)
-            AddInfoLine(Page,62,"Display Name",plr.DisplayName)
-            AddInfoLine(Page,92,"Status","✅ Active")
-            AddInfoLine(Page,122,"License","Premium")
+            -- SHORTCUT INFO
+            local ShortcutBox = Instance.new("Frame", PlayerSection)
+            ShortcutBox.Size = UDim2.new(1, 0, 0, 60)
+            ShortcutBox.Position = UDim2.new(0, 0, 0, 0)
+            ShortcutBox.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+            ShortcutBox.BorderColor3 = COLOR.ACCENT
+            ShortcutBox.BorderSizePixel = 1
+            Instance.new("UICorner", ShortcutBox).CornerRadius = UDim.new(0, 8)
+
+            local Title = Instance.new("TextLabel", ShortcutBox)
+            Title.Text = "Player"
+            Title.Size = UDim2.new(1, -12, 0, 18)
+            Title.Position = UDim2.new(0, 8, 0, 5)
+            Title.BackgroundTransparency = 1
+            Title.TextColor3 = Color3.fromRGB(170, 170, 185)
+            Title.Font = Enum.Font.GothamSemibold
+            Title.TextSize = 14
+            Title.TextXAlignment = Enum.TextXAlignment.Left
+
+            local Line1 = Instance.new("TextLabel", ShortcutBox)
+            Line1.Text = "Shortcut Key = H"
+            Line1.Size = UDim2.new(1, -16, 0, 20)
+            Line1.Position = UDim2.new(0, 10, 0, 23)
+            Line1.BackgroundTransparency = 1
+            Line1.TextColor3 = Color3.new(1,1,1)
+            Line1.Font = Enum.Font.GothamBold
+            Line1.TextSize = 16
+            Line1.TextXAlignment = Enum.TextXAlignment.Left
+
+            local Line2 = Instance.new("TextLabel", ShortcutBox)
+            Line2.Text = "Press H in keyboard to hide/unhide script interface"
+            Line2.Size = UDim2.new(1, -16, 0, 14)
+            Line2.Position = UDim2.new(0, 10, 0, 44)
+            Line2.BackgroundTransparency = 1
+            Line2.TextColor3 = Color3.fromRGB(210,210,220)
+            Line2.Font = Enum.Font.GothamSemibold
+            Line2.TextSize = 13
+            Line2.TextXAlignment = Enum.TextXAlignment.Left
+
+            -- DRAGGABLE SLIDERS (VISUAL ONLY)
+            CreateVisualSlider(PlayerSection, 68, "Walk Speed", 79)
+            CreateVisualSlider(PlayerSection, 126, "Jump Power", 100)
 
         elseif TabName=="Automation" then
             local Head=Instance.new("TextLabel", Page)
@@ -287,7 +384,7 @@ local function ShowMainUI()
     end
 end
 
--- START DIRECTLY
+-- START
 task.spawn(function()
     RunLoadingSequence()
     ShowMainUI()
